@@ -50,7 +50,7 @@ while (capture.isOpened()):
         if prediction is None:
             FPS = 'FPS {:.1f}'.format(1/(time.time()-stime))
             frame=cv2.putText(frame,FPS,(100,100),cv2.FONT_HERSHEY_COMPLEX,1,(255,0,0),2)
-            cv2.imshow('frame',frame)
+            cv2.imshow('mxnet',frame)
             continue
 
         #Else if there are predictions, scale the frame
