@@ -4,22 +4,21 @@ from utils import *
 
 def ConvBNBlock(channels, kernel_size, strides, pad, use_bias=False, leaky=True):
     blk = nn.HybridSequential()
-    blk.add(nn.Conv2D(int(channels), kernel_size=kernel_size, strides=strides, padding=pad,
-                      use_bias=use_bias))
+    blk.add(nn.Conv2D(int(channels), kernel_size=kernel_size, strides=strides, padding=pad, use_bias=use_bias))
+
     if not use_bias:
         blk.add(nn.BatchNorm(in_channels=int(channels)))
     if leaky:
         blk.add(nn.LeakyReLU(0.1))
     return blk
 
-
 class ShortCutBlock(nn.HybridBlock):
-    def __init__(self, channels):
+    def __init__(self,channels):
         super(ShortCutBlock, self).__init__()
-        self.conv_1 = ConvBNBlock(channels / 2, 1, 1, 0)
-        self.conv_2 = ConvBNBlock(channels, 3, 1, 1)
+        self.conv_1 = ConvBNBlock(channels/2,1,1,0)
+        self.conv_2 = ConvBNBlock(channels,3,1,1)
 
-    def hybrid_forward(self, F, x, *args, **kwargs):
+    def hybrid_forward(self,F,x, *args, **kwargs):
         blk = self.conv_1(x)
         blk = self.conv_2(blk)
         return blk + x
@@ -33,7 +32,6 @@ class UpSampleBlock(nn.HybridBlock):
 
     def hybrid_forward(self, F, x, *args, **kwargs):
         return F.UpSampling(x, scale=self.scale, sample_type=self.sample_type)
-
 
 class TransformBlock(nn.HybridBlock):
     def __init__(self, num_classes, stride):
@@ -51,7 +49,6 @@ class TransformBlock(nn.HybridBlock):
 
         return F.concat(xy_pred, wh_pred, score_pred, cls_pred, dim=-1)
 
-
 class DarkNet(nn.HybridBlock):
     def __init__(self, num_classes=80, input_dim=416):
         super(DarkNet, self).__init__()
@@ -60,63 +57,152 @@ class DarkNet(nn.HybridBlock):
         self.anchors = [(10, 13), (16, 30), (33, 23), (30, 61), (62, 45),
                         (59, 119), (116, 90), (156, 198), (373, 326)]
 
-        self.conv_bn_block_0 = ConvBNBlock(32, 3, 1, 1)
-        self.conv_bn_block_1 = ConvBNBlock(64, 3, 2, 1)
+        self.conv_bn_block_0 = ConvBNBlock(32, 3, 1, 1) #CHECKED filters = 32, size =3, stride =1, pad =1, bacth_norm = 1, leaky = 1
+        self.conv_bn_block_1 = ConvBNBlock(64, 3, 2, 1)#CHECKED filters = 64, size =3, stride = 2, pad = 1, batch_norm = 1, leaky = 1
+
+        #CHECKED, ShortCutBlock includes 2 ConvBNBlock, the 1st block (channels/2,1,1,1), 2nd blocl (channels,3,1,1)
         self.shortcut_block_4 = ShortCutBlock(64)
-        self.conv_bn_block_5 = ConvBNBlock(128, 3, 2, 1)
-        self.shortcut_block_8 = ShortCutBlock(128)
+
+
+        self.conv_bn_block_5 = ConvBNBlock(128, 3, 2, 1)#CHECKED filters = 128, size =3, stride =2, pad =1
+
+        #CHEKED, (64,1,1,1) and (128,3,1,1)
+        self.shortcut_block_8 = ShortCutBlock(128
+        )
+
+        #CHEKED (64,1,1,1) and (128,3,1,1)
         self.shortcut_block_11 = ShortCutBlock(128)
-        self.conv_bn_block_12 = ConvBNBlock(256, 3, 2, 1)
+
+        self.conv_bn_block_12 = ConvBNBlock(256, 3, 2, 1)#CHEKED filters = 256, size = 3, stride =2, pad =1
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_15 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_18 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_21 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_24 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_27 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_30 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_33 = ShortCutBlock(256)
+
+        #CHEKED (128,1,1,1) and (256,3,1,1)
         self.shortcut_block_36 = ShortCutBlock(256)
-        self.conv_bn_block_37 = ConvBNBlock(512, 3, 2, 1)
+
+        self.conv_bn_block_37 = ConvBNBlock(512, 3, 2, 1)#CHECKED filters = 512, size =3, stride =2, pad = 1
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_40 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_43 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_46 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_49 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_52 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_55 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_58 = ShortCutBlock(512)
+
+        #CHECKED (256,1,1,1) and (512,3,1,1)
         self.shortcut_block_61 = ShortCutBlock(512)
-        self.conv_bn_block_62 = ConvBNBlock(1024, 3, 2, 1)
+
+        self.conv_bn_block_62 = ConvBNBlock(1024, 3, 2, 1)#CHECKED filters = 1024, size =3, stride = 2, pad = 1
+
+        #CHECKED (512,1,1,1) (1024,1,1,1)
         self.shortcut_block_65 = ShortCutBlock(1024)
+
+        #CHECKED (512,1,1,1) (1024,1,1,1)
         self.shortcut_block_68 = ShortCutBlock(1024)
+
+        #CHECKED (512,1,1,1) (1024,1,1,1)
         self.shortcut_block_71 = ShortCutBlock(1024)
+
+        #CHECKED (512,1,1,1) (1024,1,1,1)
         self.shortcut_block_74 = ShortCutBlock(1024)
-        self.conv_bn_block_75 = ConvBNBlock(512, 1, 1, 0)
-        self.conv_bn_block_76 = ConvBNBlock(1024, 3, 1, 1)
-        self.conv_bn_block_77 = ConvBNBlock(512, 1, 1, 0)
-        self.conv_bn_block_78 = ConvBNBlock(1024, 3, 1, 1)
-        self.conv_bn_block_79 = ConvBNBlock(512, 1, 1, 0)
-        self.conv_bn_block_80 = ConvBNBlock(1024, 3, 1, 1)
+
+        #IS THIS BUG?
+        self.conv_bn_block_75 = ConvBNBlock(512, 1, 1, 0)#CHEKED filters = 512, size =1, stride =1, pad miss 1
+
+        self.conv_bn_block_76 = ConvBNBlock(1024, 3, 1, 1)#CHECKED filters = 1024, size =3, stride =1, pad =1
+
+        self.conv_bn_block_77 = ConvBNBlock(512, 1, 1, 0)#CHECKED filters = 512, size =1, stride =1, pad miss 2
+
+        self.conv_bn_block_78 = ConvBNBlock(1024, 3, 1, 1)#CHECKED
+
+        self.conv_bn_block_79 = ConvBNBlock(512, 1, 1, 0)#CHECKED pad miss 3
+
+        self.conv_bn_block_80 = ConvBNBlock(1024, 3, 1, 1)#CHECKED
+
+        #CHECKED 3*(5+80) = 255
         self.conv_bn_block_81 = ConvBNBlock(3 * (5+self.num_classes), 1, 1, 0, use_bias=True, leaky=False)
-        self.transform_0 = TransformBlock(num_classes, 13)
+
+        #YOLO Block - Not DownScale
+        self.transform_0 = TransformBlock(num_classes, 13) #=> giving us detection feature map of 13x13x255
+
+        #CHEKED filters = 256, strid =1, pad = 1
         self.conv_bn_block_84 = ConvBNBlock(256, 1, 1, 0)
+
+        #CHECKED Up Sample stride = 2
         self.upsample_block_85 = UpSampleBlock(scale=2)
-        self.conv_bn_block_87 = ConvBNBlock(256, 1, 1, 0)
-        self.conv_bn_block_88 = ConvBNBlock(512, 3, 1, 1)
-        self.conv_bn_block_89 = ConvBNBlock(256, 1, 1, 0)
-        self.conv_bn_block_90 = ConvBNBlock(512, 3, 1, 1)
-        self.conv_bn_block_91 = ConvBNBlock(256, 1, 1, 0)
-        self.conv_bn_block_92 = ConvBNBlock(512, 3, 1, 1)
+
+        self.conv_bn_block_87 = ConvBNBlock(256, 1, 1, 0)#CHEKED
+
+        self.conv_bn_block_88 = ConvBNBlock(512, 3, 1, 1)#CHECKED
+
+        self.conv_bn_block_89 = ConvBNBlock(256, 1, 1, 0)#CHEKED
+
+        self.conv_bn_block_90 = ConvBNBlock(512, 3, 1, 1)#CHEKED
+
+        self.conv_bn_block_91 = ConvBNBlock(256, 1, 1, 0)#CHECKED
+
+        self.conv_bn_block_92 = ConvBNBlock(512, 3, 1, 1)#CHECKED
+
+        #CHEKED 3*(80+5) = 255
         self.conv_bn_block_93 = ConvBNBlock(3 * (5+self.num_classes), 1, 1, 0, use_bias=True, leaky=False)
-        self.transform_1 = TransformBlock(num_classes, 26)
-        self.conv_bn_block_96 = ConvBNBlock(128, 1, 1, 0)
-        self.upsample_block_97 = UpSampleBlock(scale=2)
-        self.conv_bn_block_99 = ConvBNBlock(128, 1, 1, 0)
-        self.conv_bn_block_100 = ConvBNBlock(256, 3, 1, 1)
-        self.conv_bn_block_101 = ConvBNBlock(128, 1, 1, 0)
-        self.conv_bn_block_102 = ConvBNBlock(256, 3, 1, 1)
-        self.conv_bn_block_103 = ConvBNBlock(128, 1, 1, 0)
-        self.conv_bn_block_104 = ConvBNBlock(256, 3, 1, 1)
+
+        #YOLO Block - DownScale 1 time
+        self.transform_1 = TransformBlock(num_classes, 26) #=> giving us detection feature map of 26x26x255
+
+        self.conv_bn_block_96 = ConvBNBlock(128, 1, 1, 0)#CHEKED ,pad miss 1
+
+        self.upsample_block_97 = UpSampleBlock(scale=2)#CHECKED UpSample stride = 2
+
+        #In yolov3.cfg seems to have routes -1, which will clear the padding 1 we dont add
+        self.conv_bn_block_99 = ConvBNBlock(128, 1, 1, 0)#CHEKED, pad miss 1
+
+        self.conv_bn_block_100 = ConvBNBlock(256, 3, 1, 1)#CHECKED
+
+        self.conv_bn_block_101 = ConvBNBlock(128, 1, 1, 0)#CHECKED, pad miss 2
+
+        self.conv_bn_block_102 = ConvBNBlock(256, 3, 1, 1)#CHECKED
+
+        self.conv_bn_block_103 = ConvBNBlock(128, 1, 1, 0)#CHEKED, pad miss 3
+        self.conv_bn_block_104 = ConvBNBlock(256, 3, 1, 1)#CHEKED
+
+        #CHECKED 3*(80+5)=255
         self.conv_bn_block_105 = ConvBNBlock(3 * (5+self.num_classes), 1, 1, 0, use_bias=True, leaky=False)
-        self.transform_2 = TransformBlock(num_classes, 52)
+
+        #YOLO Block - DownScale 2 time
+        self.transform_2 = TransformBlock(num_classes, 52) #=> giving us detection feature map of 52x52x255
 
     def hybrid_forward(self, F, x, *args, **kwargs):
         x = self.conv_bn_block_0(x)
@@ -160,7 +246,7 @@ class DarkNet(nn.HybridBlock):
 
         route_83 = conv_79
         conv_84 = self.conv_bn_block_84(route_83)
-        upsample_85 = self.upsample_block_85(conv_84)
+        upsample_85 = self.upsample_block_85(conv_84) #=> concat with 61
         route_86 = F.concat(upsample_85, shortcut_61, dim=1)
 
         x = self.conv_bn_block_87(route_86)
@@ -285,7 +371,6 @@ class DarkNet(nn.HybridBlock):
             x = x.asnumpy()
         return np.prod(x)
 
-
 class TinyDarkNet(nn.HybridBlock):
     def __init__(self, num_classes=80, input_dim=416):
         super(TinyDarkNet, self).__init__()
@@ -293,30 +378,55 @@ class TinyDarkNet(nn.HybridBlock):
         self.input_dim = input_dim
         self.anchors = [(10, 14), (23, 27), (37, 58), (81, 82), (135, 169), (344, 319)]
 
-        self.conv_bn_block_0 = ConvBNBlock(16, 3, 1, 1)
-        self.max_pool_1 = nn.MaxPool2D(2, 2)
-        self.conv_bn_block_2 = ConvBNBlock(32, 3, 1, 1)
-        self.max_pool_3 = nn.MaxPool2D(2, 2)
-        self.conv_bn_block_4 = ConvBNBlock(64, 3, 1, 1)
-        self.max_pool_5 = nn.MaxPool2D(2, 2)
-        self.conv_bn_block_6 = ConvBNBlock(128, 3, 1, 1)
-        self.max_pool_7 = nn.MaxPool2D(2, 2)
-        self.conv_bn_block_8 = ConvBNBlock(256, 3, 1, 1)
-        self.max_pool_9 = nn.MaxPool2D(2, 2)
-        self.conv_bn_block_10 = ConvBNBlock(512, 3, 1, 1)
-        self.max_pool_11 = nn.MaxPool2D(2, 1, same_mode=True)
-        self.conv_bn_block_12 = ConvBNBlock(1024, 3, 1, 1)
-        self.conv_bn_block_13 = ConvBNBlock(256, 1, 1, 1)
-        self.conv_bn_block_14 = ConvBNBlock(512, 3, 1, 1)
+        self.conv_bn_block_0 = ConvBNBlock(16, 3, 1, 1)#CHECKED
+
+        self.max_pool_1 = nn.MaxPool2D(2, 2) #CHECKED
+
+        self.conv_bn_block_2 = ConvBNBlock(32, 3, 1, 1)#CHECKED
+
+        self.max_pool_3 = nn.MaxPool2D(2, 2)#CHECKED
+
+        self.conv_bn_block_4 = ConvBNBlock(64, 3, 1, 1)#CHECKED
+
+        self.max_pool_5 = nn.MaxPool2D(2, 2)#CHECKED
+
+        self.conv_bn_block_6 = ConvBNBlock(128, 3, 1, 1)#CHECKED
+
+        self.max_pool_7 = nn.MaxPool2D(2, 2)#CHECKED
+
+        self.conv_bn_block_8 = ConvBNBlock(256, 3, 1, 1)#CHECKED
+
+        self.max_pool_9 = nn.MaxPool2D(2, 2)#CHECKED
+
+        self.conv_bn_block_10 = ConvBNBlock(512, 3, 1, 1)#CHECKED
+
+        self.max_pool_11 = nn.MaxPool2D(2,1,padding = 1) #ADD PADDING
+
+        self.conv_bn_block_12 = ConvBNBlock(1024, 3, 1, 0)#CHECKED
+
+        self.conv_bn_block_13 = ConvBNBlock(256, 1, 1, 0)#CHECKED
+
+        self.conv_bn_block_14 = ConvBNBlock(512, 3, 1, 1)#CHECKED
+
+        #CHECKED
         self.conv_bn_block_15 = ConvBNBlock(3 * (5 + self.num_classes), 1, 1, 1, use_bias=True, leaky=False)
+
+        #YOLO Block
         self.transform_0 = TransformBlock(self.num_classes, 13)
-        self.conv_bn_block_16 = ConvBNBlock(128, 1, 1, 1)
-        self.upsample_block_17 = UpSampleBlock(scale=2)
-        self.conv_bn_block_18 = ConvBNBlock(256, 3, 1, 1)
-        self.conv_bn_block_19 = ConvBNBlock(3 * (5 + self.num_classes), 1, 1, 1, use_bias=True, leaky=False)
+
+        self.conv_bn_block_16 = ConvBNBlock(128, 1, 1, 1)#CHECKED
+
+        self.upsample_block_17 = UpSampleBlock(scale=2)#CHECKED
+
+        self.conv_bn_block_18 = ConvBNBlock(256, 3, 1, 1)#CHECKED
+
+        #CHECKED
+        self.conv_bn_block_19 = ConvBNBlock(3 * (5 + self.num_classes), 1, 1, 0, use_bias=True, leaky=False)
+
+        #YOLO Block
         self.transform_1 = TransformBlock(self.num_classes, 26)
 
-    def hybrid_forward(self, F, x, *args, **kwargs):
+    def hybrid_forward(self,F, x, *args, **kwargs):
         x = self.conv_bn_block_0(x)
         x = self.max_pool_1(x)
         x = self.conv_bn_block_2(x)
@@ -328,7 +438,13 @@ class TinyDarkNet(nn.HybridBlock):
         conv_8 = self.conv_bn_block_8(x)
         x = self.max_pool_9(conv_8)
         x = self.conv_bn_block_10(x)
+
         x = self.max_pool_11(x)
+        # print('at max pool 11: ',x.shape)
+
+        x = F.slice_axis(x,axis=2,begin=1,end=14)
+        x = F.slice_axis(x,axis=3,begin=1,end=14)
+
         x = self.conv_bn_block_12(x)
         conv_13 = self.conv_bn_block_13(x)
         x = self.conv_bn_block_14(conv_13)
@@ -336,13 +452,15 @@ class TinyDarkNet(nn.HybridBlock):
 
         predict_16 = self.transform_0(conv_15)
 
-        x = self.conv_bn_block_16(conv_13.copy())
+        x = self.conv_bn_block_16(conv_13)
         x = self.upsample_block_17(x)
-        x = nd.concat(x, conv_8, dim=1)
+        x = F.concat(x, conv_8, dim=1)
         x = self.conv_bn_block_18(x)
         x = self.conv_bn_block_19(x)
+
         predict_20 = self.transform_1(x)
-        detections = nd.concat(predict_16, predict_20, dim=1)
+
+        detections = F.concat(predict_16, predict_20, dim=1)
 
         return detections
 
@@ -436,11 +554,10 @@ class TinyDarkNet(nn.HybridBlock):
             x = x.asnumpy()
         return np.prod(x)
 
-
 if __name__ == '__main__':
     darknet = DarkNet()
     darknet.initialize()
     X = nd.uniform(shape=(1, 3, 416, 416))
     detections = darknet(X)
-    darknet.load_weights("yolov3.weights")
+    darknet.load_weights("yolov3.weights",fine_tune=False)
     print(detections.shape)

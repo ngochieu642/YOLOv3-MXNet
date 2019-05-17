@@ -1,4 +1,3 @@
-from __future__ import division
 import cv2
 import mxnet as mx
 import numpy as np
@@ -6,9 +5,10 @@ from mxnet import nd, gluon
 import threading
 import xml.etree.ElementTree as ET
 
-
 def try_gpu(num_list):
-    """If GPU is available, return mx.gpu(0); else return mx.cpu()"""
+    """If GPU is available, return mx.gpu(0); else return mx.cpu()
+    Just in case i will have more than 1 GPU in the future haha
+    """
     ctx = []
     for num in num_list:
         try:
@@ -20,34 +20,46 @@ def try_gpu(num_list):
     if not ctx:
         ctx.append(mx.cpu())
     return ctx
+# Test try_gpu
+# myGPUs = try_gpu([0,1,2,3])
+# print('Hmmm, you have: ',len(myGPUs),'GPU(s). And their name in mxnet: ',myGPUs)
 
+def bbox_iou(box1, box2, transform = True):
+    """Calculate the IoU Error
+    """
 
-def bbox_iou(box1, box2, transform=True):
+    #Change to NDArray if not
     if not isinstance(box1, nd.NDArray):
         box1 = nd.array(box1)
     if not isinstance(box2, nd.NDArray):
         box2 = nd.array(box2)
+
+    #Make sure > 0
     box1 = nd.abs(box1)
     box2 = nd.abs(box2)
+
+    '''Calculate the IoU'''
     if transform:
         tmp_box1 = box1.copy()
-        tmp_box1[:, 0] = box1[:, 0] - box1[:, 2] / 2.0
+        tmp_box1[:, 0] = box1[:, 0] - box1[:,2] / 2.0
         tmp_box1[:, 1] = box1[:, 1] - box1[:, 3] / 2.0
         tmp_box1[:, 2] = box1[:, 0] + box1[:, 2] / 2.0
         tmp_box1[:, 3] = box1[:, 1] + box1[:, 3] / 2.0
         box1 = tmp_box1
+
         tmp_box2 = box2.copy()
         tmp_box2[:, 0] = box2[:, 0] - box2[:, 2] / 2.0
         tmp_box2[:, 1] = box2[:, 1] - box2[:, 3] / 2.0
         tmp_box2[:, 2] = box2[:, 0] + box2[:, 2] / 2.0
         tmp_box2[:, 3] = box2[:, 1] + box2[:, 3] / 2.0
         box2 = tmp_box2
-    # Get the coordinates of bounding boxes
+
+    # Get the coordinates of bounding boxes (xStart,yStart,xEnd,yEnd)
     b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
     b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
     # get the corrdinates of the intersection rectangle
-    inter_rect_x1 = nd.where(b1_x1 > b2_x1, b1_x1, b2_x1)
+    inter_rect_x1 = nd.where(b1_x1 > b2_x1, b1_x1, b2_x1) #if b1_x1 > b2_x1 => x1 of the intersection rectangle must be b1_x1, otherwise it will be b2_x1. Basically it's just a max function!
     inter_rect_y1 = nd.where(b1_y1 > b2_y1, b1_y1, b2_y1)
     inter_rect_x2 = nd.where(b1_x2 < b2_x2, b1_x2, b2_x2)
     inter_rect_y2 = nd.where(b1_y2 < b2_y2, b1_y2, b2_y2)
@@ -60,10 +72,8 @@ def bbox_iou(box1, box2, transform=True):
     b1_area = (b1_x2 - b1_x1 + 1) * (b1_y2 - b1_y1 + 1)
     b2_area = (b2_x2 - b2_x1 + 1) * (b2_y2 - b2_y1 + 1)
     iou = inter_area / (b1_area + b2_area - inter_area)
-    # iou[inter_area >= b1_area] = 0.8
-    # iou[inter_area >= b2_area] = 0.8
-    return nd.clip(iou, 1e-5, 1. - 1e-5)
 
+    return nd.clip(iou, 1e-5, 1. - 1e-5)
 
 def predict_transform(prediction, input_dim, anchors):
     ctx = prediction.context
@@ -112,6 +122,52 @@ def predict_transform(prediction, input_dim, anchors):
 
     return prediction
 
+def predict_transform_tiny(prediction, input_dim, anchors):
+    ctx = prediction.context
+    if not isinstance(anchors, nd.NDArray):
+        anchors = nd.array(anchors, ctx=ctx)
+
+    batch_size = prediction.shape[0]
+    anchors_masks = [[3, 4, 5], [0, 1, 2]]
+    strides = [13, 26]
+    step = [(0, 507), (507, 2535)]
+    for i in range(2):
+        stride = strides[i]
+        grid = np.arange(stride)
+        a, b = np.meshgrid(grid, grid)
+        x_offset = nd.array(a.reshape((-1, 1)), ctx=ctx)
+        y_offset = nd.array(b.reshape((-1, 1)), ctx=ctx)
+        x_y_offset = \
+            nd.repeat(
+                nd.expand_dims(
+                    nd.repeat(
+                        nd.concat(
+                            x_offset, y_offset, dim=1), repeats=3, axis=0
+                    ).reshape((-1, 2)),
+                    0
+                ),
+                repeats=batch_size, axis=0
+            )
+        tmp_anchors = \
+            nd.repeat(
+                nd.expand_dims(
+                    nd.repeat(
+                        nd.expand_dims(
+                            anchors[anchors_masks[i]], 0
+                        ),
+                        repeats=stride * stride, axis=0
+                    ).reshape((-1, 2)),
+                    0
+                ),
+                repeats=batch_size, axis=0
+            )
+
+        prediction[:, step[i][0]:step[i][1], :2] += x_y_offset
+        prediction[:, step[i][0]:step[i][1], :2] *= (float(input_dim) / stride)
+        prediction[:, step[i][0]:step[i][1], 2:4] = \
+            nd.exp(prediction[:, step[i][0]:step[i][1], 2:4]) * tmp_anchors
+
+    return prediction
 
 def write_results(prediction, num_classes, confidence=0.5, nms_conf=0.4):
     conf_mask = (prediction[:, :, 4] > confidence).expand_dims(2)
@@ -193,7 +249,6 @@ def write_results(prediction, num_classes, confidence=0.5, nms_conf=0.4):
                 output = nd.concat(output, seq, dim=0)
     return output
 
-
 def letterbox_image(img, inp_dim, labels=None):
     img_w, img_h = img.shape[1], img.shape[0]
     w, h = inp_dim
@@ -213,7 +268,6 @@ def letterbox_image(img, inp_dim, labels=None):
 
     return canvas, labels
 
-
 def prep_image(img, inp_dim, labels=None):
     img, labels = letterbox_image(img, (inp_dim, inp_dim), labels)
     img = np.transpose(img[:, :, ::-1], (2, 0, 1)).astype("float32")
@@ -221,7 +275,6 @@ def prep_image(img, inp_dim, labels=None):
     if labels is not None:
         return img, labels
     return img
-
 
 def load_classes(namesfile):
     fp = open(namesfile, "r")
@@ -231,12 +284,10 @@ def load_classes(namesfile):
         names.pop(-1)
     return names
 
-
 def split_and_load(data, ctx):
     n, k = data.shape[0], len(ctx)
     m = n // k
     return [data[i * m: (i + 1) * m].as_in_context(ctx[i]) for i in range(k)]
-
 
 class SigmoidBinaryCrossEntropyLoss(gluon.loss.Loss):
     def __init__(self, from_sigmoid=False, weight=1, batch_axis=0, **kwargs):
@@ -264,7 +315,6 @@ class L1Loss(gluon.loss.Loss):
         tmp_loss = gluon.loss._apply_weighting(F, tmp_loss, self._weight, sample_weight)
         return tmp_loss
 
-
 class L2Loss(gluon.loss.Loss):
     def __init__(self, weight=1., batch_axis=0, **kwargs):
         super(L2Loss, self).__init__(weight, batch_axis, **kwargs)
@@ -274,7 +324,6 @@ class L2Loss(gluon.loss.Loss):
         tmp_loss = F.square(pred - label)
         tmp_loss = gluon.loss._apply_weighting(F, tmp_loss, self._weight / 2, sample_weight)
         return tmp_loss
-
 
 class FocalLoss(gluon.loss.Loss):
     def __init__(self, weight=1, batch_axis=0, gamma=2, eps=1e-7, alpha=0.25, with_ce=False):
@@ -299,7 +348,6 @@ class FocalLoss(gluon.loss.Loss):
         tmp_loss = gluon.loss._apply_weighting(F, tmp_loss, self._weight, sample_weight)
         return tmp_loss
 
-
 class HuberLoss(gluon.loss.Loss):
     def __init__(self, rho=1, weight=None, batch_axis=0, **kwargs):
         super(HuberLoss, self).__init__(weight, batch_axis, **kwargs)
@@ -312,7 +360,6 @@ class HuberLoss(gluon.loss.Loss):
                        (0.5/self._rho) * F.power(loss, 2))
         loss = gluon.loss._apply_weighting(F, loss, self._weight, sample_weight)
         return loss
-
 
 class LossRecorder(mx.metric.EvalMetric):
     """LossRecorder is used to record raw loss so we can observe loss directly
@@ -328,7 +375,6 @@ class LossRecorder(mx.metric.EvalMetric):
             self.sum_metric += np.mean(loss.copy().asnumpy())
             self.num_inst += 1
 
-
 class MyThread(threading.Thread):
     def __init__(self, func, args=()):
         super(MyThread, self).__init__()
@@ -340,108 +386,7 @@ class MyThread(threading.Thread):
 
     def get_result(self):
         try:
-            return self.result  # 如果子线程不使用join方法，此处可能会报没有self.result的错误
+            return self.result
         except Exception as e:
             print(e)
             return None
-
-
-def parse_xml(xml_file, classes):
-    root = ET.parse(xml_file).getroot()
-    image_size = root.find("size")
-    size = {
-        "width": float(image_size.find("width").text),
-        "height": float(image_size.find("height").text),
-        "depth": float(image_size.find("depth").text)
-    }
-    bbox = []
-    if not isinstance(classes, np.ndarray):
-        classes = np.array(classes)
-    for obj in root.findall("object"):
-        cls = np.argwhere(classes == obj.find("name").text).reshape(-1)[0]
-        bndbox = obj.find("bndbox")
-        xmin = float(bndbox.find("xmin").text)
-        ymin = float(bndbox.find("ymin").text)
-        xmax = float(bndbox.find("xmax").text)
-        ymax = float(bndbox.find("ymax").text)
-        center_x = (xmin + xmax) / 2.0 / size["width"]
-        center_y = (ymin + ymax) / 2.0 / size["height"]
-        width = (xmax - xmin) / size["width"]
-        height = (ymax - ymin) / size["height"]
-        bbox.append([cls, center_x, center_y, width, height])
-    return np.array(bbox)
-
-
-def prep_label(label_file, classes):
-    num_classes = len(classes)
-    if isinstance(label_file, list):
-        labels = label_file
-    elif label_file.endswith(".txt"):
-        with open(label_file, "r") as file:
-            labels = file.readlines()
-            labels = np.array([list(map(float, x.split())) for x in labels], dtype="float32")
-    elif label_file.endswith(".xml"):
-        labels = parse_xml(label_file, classes)
-    final_labels = nd.zeros(shape=(30, num_classes + 5), dtype="float32")
-    i = 0
-    for label in labels:
-        one_hot = np.zeros(shape=(num_classes + 5), dtype="float32")
-        one_hot[5 + int(label[0])] = 1.0
-        one_hot[4] = 1.0
-        one_hot[:4] = label[1:]
-        final_labels[i] = one_hot
-        i += 1
-        i %= 30
-    return nd.array(final_labels)
-
-
-def prep_final_label(labels, num_classes, input_dim=416):
-    ctx = labels.context
-    anchors = nd.array([(10, 13), (16, 30), (33, 23), (30, 61), (62, 45),
-                        (59, 119), (116, 90), (156, 198), (373, 326)], ctx=ctx)
-    anchors_mask = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
-
-    label_1 = nd.zeros(shape=(13, 13, 3, num_classes + 5), dtype="float32", ctx=ctx)
-    label_2 = nd.zeros(shape=(26, 26, 3, num_classes + 5), dtype="float32", ctx=ctx)
-    label_3 = nd.zeros(shape=(52, 52, 3, num_classes + 5), dtype="float32", ctx=ctx)
-
-    true_label_1 = nd.zeros(shape=(13, 13, 3, 5), dtype="float32", ctx=ctx)
-    true_label_2 = nd.zeros(shape=(26, 26, 3, 5), dtype="float32", ctx=ctx)
-    true_label_3 = nd.zeros(shape=(52, 52, 3, 5), dtype="float32", ctx=ctx)
-
-    label_list = [label_1, label_2, label_3]
-    true_label_list = [true_label_1, true_label_2, true_label_3]
-    for x_box in range(labels.shape[0]):
-        if labels[x_box, 4] == 0.0:
-            break
-        for i in range(3):
-            stride = 2 ** i * 13
-            tmp_anchors = anchors[anchors_mask[i]]
-            tmp_xywh = nd.repeat(nd.expand_dims(labels[x_box, :4] * stride, axis=0),
-                                 repeats=tmp_anchors.shape[0], axis=0)
-            anchor_xywh = tmp_xywh.copy()
-            anchor_xywh[:, 2:4] = tmp_anchors / input_dim * stride
-            best_anchor = nd.argmax(bbox_iou(tmp_xywh, anchor_xywh), axis=0)
-            label = labels[x_box].copy()
-            tmp_idx = nd.floor(label[:2] * stride)
-            label[:2] = label[:2] * stride
-            label[:2] -= tmp_idx
-            tmp_idx = tmp_idx.astype("int")
-            label[2:4] = nd.log(label[2:4] * input_dim / tmp_anchors[best_anchor].reshape(-1) + 1e-12)
-
-            label_list[i][tmp_idx[1], tmp_idx[0], best_anchor] = label
-
-            true_xywhs = labels[x_box, :5] * input_dim
-            true_xywhs[4] = 1.0
-            true_label_list[i][tmp_idx[1], tmp_idx[0], best_anchor] = true_xywhs
-
-    t_y = nd.concat(label_1.reshape((-1, num_classes + 5)),
-                    label_2.reshape((-1, num_classes + 5)),
-                    label_3.reshape((-1, num_classes + 5)),
-                    dim=0)
-    t_xywhs = nd.concat(true_label_1.reshape((-1, 5)),
-                        true_label_2.reshape((-1, 5)),
-                        true_label_3.reshape((-1, 5)),
-                        dim=0)
-
-    return t_y, t_xywhs
