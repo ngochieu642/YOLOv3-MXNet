@@ -1,5 +1,5 @@
 ## Installation
-  - opencv-contrib python (4.1.0)
+  - opencv-contrib-python (4.1.0)
   - Without GPU: mxnet (1.4.0)
   - With NVIDIA GPU and CUDA: mxnet-cu90 (for CUDA 9.0) or mxnet-cu100 (for CUDA 10.0)
 ## Project Structure

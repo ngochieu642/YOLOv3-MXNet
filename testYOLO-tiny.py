@@ -21,6 +21,7 @@ net.initialize(ctx=ctx)
 
 tmp_batch = nd.uniform(shape=(1, 3, input_dim, input_dim), ctx=ctx)
 net(tmp_batch)
+
 param=str("./data/weights/yolov3-tiny.weights")
 
 #Load weights
